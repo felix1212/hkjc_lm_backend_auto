@@ -1,0 +1,190 @@
+name: HKJC-LM
+services:
+  postgres:
+    image: postgres:16.8
+    container_name: postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./conf/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./conf/postgresql.conf:/etc/postgresql/postgresql.conf.sample
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf.sample"] # For Database monitoring
+    networks:
+      - hkjc-lm
+
+  hkjc-lm-backend-dd-auto:
+    image: hkjc-lm-backend-auto:1.0.1 ## 1.0.1 - Added latency of querydb:5ms, insertdb:15ms, truncatetable:25ms to fit Jennifer's dashboard
+    container_name: hkjc-lm-backend-dd-auto
+    environment:
+      #### Environment Variables for DD Tracer ####
+      - DD_AGENT_HOST=dd-agent
+      # - DD_TRACE_OTEL_ENABLED=true ## Force DD to use OTel trace ID. Otherwise, custom instrumentation part in code will use DD trace ID.
+    ports:
+      - "8080:8080"
+    networks:
+      - hkjc-lm
+    # -Ddd.service=hkjc-otel-poc -> Override OTel SDK settings in code
+    # -Ddd.env=staging -> Override OTel SDK settings in code
+    # -Ddd.version=1.0 -> Override OTel SDK settings in code
+    # -Ddd.trace.propagation.style=tracecontext -> Use W3C header
+    # -Ddd.dbm.propagation.mode=full -> Correlate Database Monitoring and Traces
+    # -Ddd.integration.jdbc-datasource.enabled -> Correlate Database Monitoring and Traces
+    # -Ddd.dbm.trace_prepared_statements=true -> Enable the prepared statements tracing
+    
+    #### Java options for DD tracer ####       
+    command: >
+      java -javaagent:/app/dd-java-agent.jar
+      -Ddd.profiling.enabled=true
+      -XX:FlightRecorderOptions=stackdepth=256
+      -Ddd.service=Testapp-hkjc-lm-backend-dd-auto
+      -Ddd.env=DEV
+      -Ddd.version=1
+      -Ddd.trace.propagation.style=tracecontext
+      -Ddd.trace.otel.enabled=true
+      -Ddd.dbm.propagation.mode=full
+      -Ddd.dbm.trace_prepared_statements=true
+      -Ddd.integration.jdbc-datasource.enabled=true
+      -Ddd.tags=HKJC_Tier:Testapp-hkjc-lm-backend-dd-auto,HKJC_HKLM_Service:Service
+      -jar /app/hkjc-lm-backend-auto.war --spring.datasource.url=jdbc:postgresql://postgres:5432/testing_db
+    depends_on:
+      - dd-agent
+      - postgres
+
+  hkjc-lm-frontend-dd-auto:
+    image: hkjc-lm-frontend-auto:1.0
+    container_name: hkjc-lm-frontend-dd-auto
+    environment:
+      #### Environment Variables for DD Tracer ####
+      - DD_AGENT_HOST=dd-agent
+      #- DD_TRACE_OTEL_ENABLED=true ## Force DD to use OTel trace ID. Otherwise, custom instrumentation part in code will use DD trace ID.
+    ports:
+      - "9090:24680"
+    networks:
+      - hkjc-lm
+    depends_on:
+      - hkjc-lm-backend-dd-auto
+    #### Java options for OTel SDK ####
+    command: >
+      java -javaagent:/app/dd-java-agent.jar
+      -Ddd.profiling.enabled=true
+      -XX:FlightRecorderOptions=stackdepth=256
+      -Ddd.service=Testapp-hkjc-lm-frontend-dd-auto
+      -Ddd.env=DEV
+      -Ddd.version=1
+      -Ddd.trace.otel.enabled=true
+      -Ddd.trace.propagation.style=tracecontext
+      -Ddd.trace.debug=false
+      -Ddd.trace.startup.logs=false
+      -Ddd.tags=HKJC_Tier:Testapp-hkjc-lm-frontend-dd-auto,HKJC_HKLM_Service:Service
+      -jar /app/hkjc-lm-frontend-auto.war
+      --dd.query.url=http://hkjc-lm-backend-dd-auto:8080/querydb
+      --dd.insert.url=http://hkjc-lm-backend-dd-auto:8080/insertdb
+      --dd.truncate.url=http://hkjc-lm-backend-dd-auto:8080/truncatetable
+ 
+  hkjc-lm-pojo-dd-auto:
+    image: hkjc-lm-pojo-auto:1.3.1  # 1.3.1 - Change to fast:5ms, normal:15ms, slow:25ms to fit Jennifer's dashboard 
+    container_name: hkjc-lm-pojo-dd-auto
+    environment:
+      #### Environment Variables for DD Tracer ####
+      - DD_AGENT_HOST=dd-agent
+      # - DD_TRACE_OTEL_ENABLED=true ## Force DD to use OTel trace ID. Otherwise, custom instrumentation part in code will use DD trace ID.
+    ports:
+      - "8081:8080"
+    networks:
+      - hkjc-lm
+    depends_on:
+      - dd-agent
+    #### Java options for OTel SDK ####  
+    command: >
+      java -javaagent:/app/dd-java-agent.jar
+      -Ddd.profiling.enabled=true
+      -XX:FlightRecorderOptions=stackdepth=256
+      -Ddd.service=Testapp-hkjc-lm-pojo-dd-auto
+      -Ddd.env=DEV
+      -Ddd.version=1
+      -Ddd.trace.otel.enabled=true
+      -Ddd.trace.propagation.style=tracecontext
+      -Ddd.trace.debug=false
+      -Ddd.trace.startup.logs=false
+      -Ddd.tags=HKJC_Tier:Testapp-hkjc-lm-pojo-dd-auto,HKJC_HKLM_Service:Service
+      -Ddd.trace.methods=com.example.invoice.InvoiceProcessor[slow,normal,fast,all]
+      -jar /app/hkjc-lm-pojo-auto.jar
+
+  dd-agent:
+    cgroup: host
+    pid: host
+    container_name: dd-agent
+    environment:
+      - DD_API_KEY=d361165de74819d5e2399a9c9f8a1694 
+      - DD_SITE=datadoghq.com
+      # - DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_GRPC_ENDPOINT=0.0.0.0:4317
+      # - DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_HTTP_ENDPOINT=0.0.0.0:4318
+      - DD_LOGS_INJECTION=true
+      - DD_LOGS_ENABLED=true
+      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true
+      # - DD_OTLP_CONFIG_LOGS_ENABLED=true
+      - DD_APM_ENABLED=true
+      - DD_APM_NON_LOCAL_TRAFFIC=true # Receive APM data from other containers
+      - DD_DOGSTATSD_NON_LOCAL_TRAFFIC=true # Receive metrics from other containers
+      - DD_APM_RECEIVER_SOCKET=/opt/datadog/apm/inject/run/apm.socket
+      - DD_PROCESS_AGENT_ENABLED=true
+      #- DD_SYSTEM_PROBE_NETWORK_ENABLED=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./conf/db_monitoring_conf.yaml:/conf.d/postgres.d/conf.yaml # Enable Postgre DB monitoring
+    ports:
+      # - 4317:4317
+      - 8126:8126/tcp
+      # - 4318:4318
+    image: gcr.io/datadoghq/agent:latest
+    cap_add:
+      - SYS_ADMIN
+      - SYS_RESOURCE
+      - SYS_PTRACE
+      - NET_ADMIN
+      - NET_BROADCAST
+      - NET_RAW
+      - IPC_LOCK
+      - CHOWN
+    security_opt:
+      - apparmor:unconfined
+    networks:
+      - hkjc-lm
+  # jaeger:
+  #   image: jaegertracing/all-in-one:latest
+  #   container_name: jaeger
+  #   ports:
+  #     - "16686:16686"
+  #     - "43170:4317"
+  #     - "43180:4318"
+  #   environment:
+  #     - LOG_LEVEL=debug
+  #   networks:
+  #     - hkjc-lm
+
+  
+  # otel-collector:
+  #   ports:
+  #       - 4317:4317
+  #   container_name: otel_collector
+  #   volumes:
+  #       - ./otel_collector_config.yaml:/etc/otelcol-contrib/config.yaml
+  #   image: otel/opentelemetry-collector-contrib
+  #   networks:
+  #     - hkjc-lm
+  # netshoot:
+  #   image: nicolaka/netshoot
+  #   command: tail -f /dev/null
+  #   privileged: true
+  #   networks:
+  #     - hkjc-lm
+
+networks:
+  hkjc-lm:
