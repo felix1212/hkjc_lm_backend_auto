@@ -2,12 +2,15 @@
  *  Change log:
  *  1.0 - Initial version
  *  1.0.1 - Added latency of querydb:5ms, insertdb:15ms, truncatetable:25ms to fit Jennifer's dashboard
+ *  1.0.2 - Modified latency to be querydb:2500ms(delay1), insertdb:7500ms(delay2), truncatetable:12500ms(delay3)
+ * 			Latency is configurable in application.properties as delay1,delay2,delay3
  */
 
 package com.example.demo;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.beans.factory.annotation.Value;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,6 +36,15 @@ public class DemoApplication extends SpringBootServletInitializer{
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
+	@Value("${delay1}")
+	private int delay1;
+
+	@Value("${delay2}")
+	private int delay2;
+
+	@Value("${delay3}")
+	private int delay3;
+
 	public static void main(String[] args) {
 		SpringApplication.run(DemoApplication.class, args);
 	}
@@ -43,7 +55,8 @@ public class DemoApplication extends SpringBootServletInitializer{
 	@GetMapping("/querydb")
 	public ResponseEntity<?> queryDatabase(HttpServletRequest request) {
 		try {
-			Thread.sleep(5); // Pause 5 milliseconds
+			logger.info("/querydb called with a delay of " + delay1 + "ms");
+			Thread.sleep(delay1); // Use delay1 from properties
 			String sql = "SELECT * FROM sample_table";
 			List<Map<String, Object>> results = jdbcTemplate.queryForList(sql);
 			logger.info("Database queried successfully");
@@ -59,9 +72,9 @@ public class DemoApplication extends SpringBootServletInitializer{
 	@PutMapping("/insertdb")
 	public ResponseEntity<String> insertRecords(@RequestBody List<Map<String, String>> records, HttpServletRequest request) {
 		try {
-			Thread.sleep(15); // Pause 15 milliseconds
+			logger.info("/insertdb called with a delay of " + delay2 + "ms");
+			Thread.sleep(delay2); // Use delay2 from properties
 			String sql = "INSERT INTO sample_table (name, value) VALUES (?, ?)";
-			
 			for (Map<String, String> record : records) {
 				jdbcTemplate.update(sql, record.get("name"), record.get("value"));
 			}
@@ -77,7 +90,8 @@ public class DemoApplication extends SpringBootServletInitializer{
 	@PostMapping("/truncatetable")
 	public ResponseEntity<String> truncateTable(HttpServletRequest request) {
 		try {
-			Thread.sleep(25); // Pause 5 milliseconds
+			logger.info("/truncatedb called with a delay of " + delay3 + "ms");
+			Thread.sleep(delay3); // Use delay3 from properties
 			String sql = "TRUNCATE TABLE sample_table";
 			jdbcTemplate.execute(sql);
 			logger.info("Table truncated successfully");
