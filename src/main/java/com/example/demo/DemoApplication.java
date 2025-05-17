@@ -25,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import jakarta.servlet.http.HttpServletRequest;
@@ -45,18 +46,36 @@ public class DemoApplication extends SpringBootServletInitializer{
 	@Value("${delay3}")
 	private int delay3;
 
+	@Value("${delay4}")
+	private int delay4;
+
 	public static void main(String[] args) {
 		SpringApplication.run(DemoApplication.class, args);
 	}
 
 	private static final Logger logger = LoggerFactory.getLogger(DemoApplication.class);
 
+    @GetMapping("/health")
+    public ResponseEntity<?> healthCheck() {
+		try {
+			logger.info("/health called with a delay of " + delay1 + "ms");
+			Thread.sleep(delay1); // Use delay1 from properties
+			logger.info("Health check endpoint called");
+			Map<String, String> response = new HashMap<>();
+			response.put("status", "ok");
+			return ResponseEntity.ok(response);
+		} catch (Exception e) {
+			logger.error("e");
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
+		}
+    }
+
 	// Endpoint to select all records from testing_db
 	@GetMapping("/querydb")
 	public ResponseEntity<?> queryDatabase(HttpServletRequest request) {
 		try {
-			logger.info("/querydb called with a delay of " + delay1 + "ms");
-			Thread.sleep(delay1); // Use delay1 from properties
+			logger.info("/querydb called with a delay of " + delay2 + "ms");
+			Thread.sleep(delay2); // Use delay1 from properties
 			String sql = "SELECT * FROM sample_table";
 			List<Map<String, Object>> results = jdbcTemplate.queryForList(sql);
 			logger.info("Database queried successfully");
@@ -72,8 +91,8 @@ public class DemoApplication extends SpringBootServletInitializer{
 	@PutMapping("/insertdb")
 	public ResponseEntity<String> insertRecords(@RequestBody List<Map<String, String>> records, HttpServletRequest request) {
 		try {
-			logger.info("/insertdb called with a delay of " + delay2 + "ms");
-			Thread.sleep(delay2); // Use delay2 from properties
+			logger.info("/insertdb called with a delay of " + delay3 + "ms");
+			Thread.sleep(delay3); // Use delay2 from properties
 			String sql = "INSERT INTO sample_table (name, value) VALUES (?, ?)";
 			for (Map<String, String> record : records) {
 				jdbcTemplate.update(sql, record.get("name"), record.get("value"));
@@ -90,8 +109,8 @@ public class DemoApplication extends SpringBootServletInitializer{
 	@PostMapping("/truncatetable")
 	public ResponseEntity<String> truncateTable(HttpServletRequest request) {
 		try {
-			logger.info("/truncatedb called with a delay of " + delay3 + "ms");
-			Thread.sleep(delay3); // Use delay3 from properties
+			logger.info("/truncatedb called with a delay of " + delay4 + "ms");
+			Thread.sleep(delay4); // Use delay3 from properties
 			String sql = "TRUNCATE TABLE sample_table";
 			jdbcTemplate.execute(sql);
 			logger.info("Table truncated successfully");

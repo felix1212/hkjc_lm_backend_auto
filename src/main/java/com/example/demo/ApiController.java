@@ -8,11 +8,5 @@ import org.springframework.web.bind.annotation.*;
 public class ApiController {
     
     private static final Logger logger = LoggerFactory.getLogger(ApiController.class);
-    
-    @GetMapping("/health")
-    public String healthCheck() {
-        logger.info("Health check endpoint called");
-        return "OK";
-    }
 
 }
