@@ -4,6 +4,7 @@
  *  1.0.1 - Added latency of querydb:5ms, insertdb:15ms, truncatetable:25ms to fit Jennifer's dashboard
  *  1.0.2 - Modified latency to be querydb:2500ms(delay1), insertdb:7500ms(delay2), truncatetable:12500ms(delay3)
  * 			Latency is configurable in application.properties as delay1,delay2,delay3
+ *  1.0.3 - Added querytable to read table name from header. This is used to test Dynamic Instrumentation
  */
 
 package com.example.demo;
@@ -85,6 +86,26 @@ public class DemoApplication extends SpringBootServletInitializer{
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
 				.body("Failed to query database: " + e.getMessage());
 		} 
+	}
+
+	@GetMapping("/querytable")
+	public ResponseEntity<?> queryTable(HttpServletRequest request) {
+		String tableName = request.getHeader("querytable");
+		if (tableName == null || !tableName.matches("^[a-zA-Z0-9_]+$")) {
+			logger.error("Invalid or missing table name in header");
+			return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid or missing table name in header");
+		}
+		try {
+			logger.info("/querytable called for table: " + tableName);
+			String sql = "SELECT * FROM " + tableName;
+			List<Map<String, Object>> results = jdbcTemplate.queryForList(sql);
+			logger.info("Table '" + tableName + "' queried successfully");
+			return ResponseEntity.ok(results);
+		} catch (Exception e) {
+			logger.error("Error querying table '" + tableName + "': " + e.getMessage());
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+				.body("Failed to query table '" + tableName + "': " + e.getMessage());
+		}
 	}
 
 	// Endpoint to insert JSON array request body into testing_db
