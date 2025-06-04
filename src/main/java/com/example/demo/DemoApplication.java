@@ -5,6 +5,7 @@
  *  1.0.2 - Modified latency to be querydb:2500ms(delay1), insertdb:7500ms(delay2), truncatetable:12500ms(delay3)
  * 			Latency is configurable in application.properties as delay1,delay2,delay3
  *  1.0.3 - Added querytable to read table name from header. This is used to test Dynamic Instrumentation
+ *  1.0.4 - Modified latency settings
  */
 
 package com.example.demo;
@@ -38,17 +39,20 @@ public class DemoApplication extends SpringBootServletInitializer{
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
-	@Value("${delay1}")
-	private int delay1;
+	@Value("${healthdelay}")
+	private int healthDelay;
 
-	@Value("${delay2}")
-	private int delay2;
+	@Value("${querydbdelay}")
+	private int querydbDelay;
 
-	@Value("${delay3}")
-	private int delay3;
+	@Value("${querytabledelay}")
+	private int querytableDelay;
 
-	@Value("${delay4}")
-	private int delay4;
+	@Value("${insertdbdelay}")
+	private int insertdbDelay;
+
+	@Value("${truncatetabledelay}")
+	private int truncatetableDelay;
 
 	public static void main(String[] args) {
 		SpringApplication.run(DemoApplication.class, args);
@@ -59,8 +63,8 @@ public class DemoApplication extends SpringBootServletInitializer{
     @GetMapping("/health")
     public ResponseEntity<?> healthCheck() {
 		try {
-			logger.info("/health called with a delay of " + delay1 + "ms");
-			Thread.sleep(delay1); // Use delay1 from properties
+			logger.info("/health called with a delay of " + healthDelay + "ms");
+			Thread.sleep(healthDelay); // Use delay1 from properties
 			logger.info("Health check endpoint called");
 			Map<String, String> response = new HashMap<>();
 			response.put("status", "ok");
@@ -75,8 +79,8 @@ public class DemoApplication extends SpringBootServletInitializer{
 	@GetMapping("/querydb")
 	public ResponseEntity<?> queryDatabase(HttpServletRequest request) {
 		try {
-			logger.info("/querydb called with a delay of " + delay2 + "ms");
-			Thread.sleep(delay2); // Use delay1 from properties
+			logger.info("/querydb called with a delay of " + querydbDelay + "ms");
+			Thread.sleep(querydbDelay); // Use delay1 from properties
 			String sql = "SELECT * FROM sample_table";
 			List<Map<String, Object>> results = jdbcTemplate.queryForList(sql);
 			logger.info("Database queried successfully");
@@ -96,6 +100,8 @@ public class DemoApplication extends SpringBootServletInitializer{
 			return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid or missing table name in header");
 		}
 		try {
+			logger.info("/querytable called with a delay of " + querytableDelay + "ms");
+			Thread.sleep(querytableDelay); // Use delay1 from properties
 			logger.info("/querytable called for table: " + tableName);
 			String sql = "SELECT * FROM " + tableName;
 			List<Map<String, Object>> results = jdbcTemplate.queryForList(sql);
@@ -112,8 +118,8 @@ public class DemoApplication extends SpringBootServletInitializer{
 	@PutMapping("/insertdb")
 	public ResponseEntity<String> insertRecords(@RequestBody List<Map<String, String>> records, HttpServletRequest request) {
 		try {
-			logger.info("/insertdb called with a delay of " + delay3 + "ms");
-			Thread.sleep(delay3); // Use delay2 from properties
+			logger.info("/insertdb called with a delay of " + insertdbDelay + "ms");
+			Thread.sleep(insertdbDelay); // Use delay2 from properties
 			String sql = "INSERT INTO sample_table (name, value) VALUES (?, ?)";
 			for (Map<String, String> record : records) {
 				jdbcTemplate.update(sql, record.get("name"), record.get("value"));
@@ -130,8 +136,8 @@ public class DemoApplication extends SpringBootServletInitializer{
 	@PostMapping("/truncatetable")
 	public ResponseEntity<String> truncateTable(HttpServletRequest request) {
 		try {
-			logger.info("/truncatedb called with a delay of " + delay4 + "ms");
-			Thread.sleep(delay4); // Use delay3 from properties
+			logger.info("/truncatedb called with a delay of " + truncatetableDelay + "ms");
+			Thread.sleep(truncatetableDelay); // Use delay3 from properties
 			String sql = "TRUNCATE TABLE sample_table";
 			jdbcTemplate.execute(sql);
 			logger.info("Table truncated successfully");
