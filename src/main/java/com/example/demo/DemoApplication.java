@@ -56,6 +56,7 @@ public class DemoApplication extends SpringBootServletInitializer{
 
 	public static void main(String[] args) {
 		SpringApplication.run(DemoApplication.class, args);
+		logger.info("App Version: 1.0.4");
 	}
 
 	private static final Logger logger = LoggerFactory.getLogger(DemoApplication.class);
@@ -92,6 +93,7 @@ public class DemoApplication extends SpringBootServletInitializer{
 		} 
 	}
 
+	// Endpoint for testing dynamic instrumentation by retrieving 'tableName' as spantag
 	@GetMapping("/querytable")
 	public ResponseEntity<?> queryTable(HttpServletRequest request) {
 		String tableName = request.getHeader("querytable");
