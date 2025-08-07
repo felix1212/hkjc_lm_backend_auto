@@ -6,6 +6,7 @@
  * 			Latency is configurable in application.properties as delay1,delay2,delay3
  *  1.0.3 - Added querytable to read table name from header. This is used to test Dynamic Instrumentation
  *  1.0.4 - Modified latency settings
+ *  1.0.5 - Added CORS mapping to allow requests from settings in application.properties, and removed health delay
  */
 
 package com.example.demo;
@@ -13,7 +14,9 @@ package com.example.demo;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.beans.factory.annotation.Value;
-
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -34,7 +37,8 @@ import jakarta.servlet.http.HttpServletRequest;
 
 @SpringBootApplication
 @RestController
-public class DemoApplication extends SpringBootServletInitializer{
+@Configuration
+public class DemoApplication extends SpringBootServletInitializer implements WebMvcConfigurer {
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
@@ -54,6 +58,26 @@ public class DemoApplication extends SpringBootServletInitializer{
 	@Value("${truncatetabledelay}")
 	private int truncatetableDelay;
 
+	@Value("${allowedOrigins}")
+	private String allowedOrigins;
+
+	@Value("${allowedHeaders}")
+	private String allowedHeaders;
+
+	@Value("${exposedHeaders}")
+	private String exposedHeaders;
+
+	@Value("${allowedMethods}")	
+	private String allowedMethods;
+
+	@Override
+	public void addCorsMappings(CorsRegistry registry) {
+	  registry.addMapping("/**")
+		.allowedOrigins(allowedOrigins.split(","))
+		.allowedHeaders(allowedHeaders.split(","))
+		.exposedHeaders(exposedHeaders.split(","))
+		.allowedMethods(allowedMethods.split(","));
+	}
 	public static void main(String[] args) {
 		SpringApplication.run(DemoApplication.class, args);
 		logger.info("App Version: 1.0.4");
@@ -64,8 +88,8 @@ public class DemoApplication extends SpringBootServletInitializer{
     @GetMapping("/health")
     public ResponseEntity<?> healthCheck() {
 		try {
-			logger.info("/health called with a delay of " + healthDelay + "ms");
-			Thread.sleep(healthDelay); // Use delay1 from properties
+			// logger.info("/health called with a delay of " + healthDelay + "ms");
+			// Thread.sleep(healthDelay); // Use delay1 from properties
 			logger.info("Health check endpoint called");
 			Map<String, String> response = new HashMap<>();
 			response.put("status", "ok");
