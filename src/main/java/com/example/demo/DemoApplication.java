@@ -88,8 +88,8 @@ public class DemoApplication extends SpringBootServletInitializer implements Web
     @GetMapping("/health")
     public ResponseEntity<?> healthCheck() {
 		try {
-			// logger.info("/health called with a delay of " + healthDelay + "ms");
-			// Thread.sleep(healthDelay); // Use delay1 from properties
+			logger.info("/health called with a delay of " + healthDelay + "ms");
+			Thread.sleep(healthDelay); // Use delay1 from properties
 			logger.info("Health check endpoint called");
 			Map<String, String> response = new HashMap<>();
 			response.put("status", "ok");
