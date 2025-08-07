@@ -7,6 +7,7 @@
  *  1.0.3 - Added querytable to read table name from header. This is used to test Dynamic Instrumentation
  *  1.0.4 - Modified latency settings
  *  1.0.5 - Added CORS mapping to allow requests from settings in application.properties, and removed health delay
+ *  1.0.6 - Added random delay endpoint with configurable lower and upper bounds
  */
 
 package com.example.demo;
@@ -70,6 +71,12 @@ public class DemoApplication extends SpringBootServletInitializer implements Web
 	@Value("${allowedMethods}")	
 	private String allowedMethods;
 
+	@Value("${randomdelaylowerbound}")
+	private int randomDelayLowerBound;
+
+	@Value("${randomdelayupperbound}")
+	private int randomDelayUpperBound;
+
 	@Override
 	public void addCorsMappings(CorsRegistry registry) {
 	  registry.addMapping("/**")
@@ -99,6 +106,32 @@ public class DemoApplication extends SpringBootServletInitializer implements Web
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
 		}
     }
+
+	// Endpoint with random delay between configured bounds
+	@GetMapping("/random")
+	public ResponseEntity<?> randomDelay(HttpServletRequest request) {
+		try {
+			// Generate random delay between lower and upper bounds (in seconds)
+			// Convert to milliseconds and ensure values end with 000 (whole seconds only)
+			int randomDelaySeconds = (int) (Math.random() * (randomDelayUpperBound - randomDelayLowerBound + 1)) + randomDelayLowerBound;
+			int randomDelay = randomDelaySeconds * 1000; // Convert to milliseconds
+			
+			logger.info("/random called with a random delay of " + randomDelay + "ms (" + randomDelaySeconds + " seconds)");
+			Thread.sleep(randomDelay);
+			
+			Map<String, Object> response = new HashMap<>();
+			response.put("status", "ok");
+			response.put("delay", randomDelay);
+			response.put("message", "Random delay completed successfully");
+			
+			logger.info("Random delay endpoint completed with delay: " + randomDelay + "ms (" + randomDelaySeconds + " seconds)");
+			return ResponseEntity.ok(response);
+		} catch (Exception e) {
+			logger.error("Error in random delay endpoint: " + e.getMessage());
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+				.body("Failed to process random delay: " + e.getMessage());
+		}
+	}
 
 	// Endpoint to select all records from testing_db
 	@GetMapping("/querydb")
