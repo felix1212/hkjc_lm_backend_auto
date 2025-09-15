@@ -35,4 +35,4 @@ build/
 ## Custom ##
 /docker/*.jar
 /docker/*.war
-/docker/*.yaml
+/docker/.env

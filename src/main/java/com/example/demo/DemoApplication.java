@@ -8,6 +8,8 @@
  *  1.0.4 - Modified latency settings
  *  1.0.5 - Added CORS mapping to allow requests from settings in application.properties, and removed health delay
  *  1.0.6 - Added random delay endpoint with configurable lower and upper bounds
+ *  1.0.7 - Added dummy endpoint to test Remote Configuration
+ *  1.0.7.1 - Added POST request to httpbin.org/post to dummy endpoint
  */
 
 package com.example.demo;
@@ -35,6 +37,11 @@ import java.util.HashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import jakarta.servlet.http.HttpServletRequest;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.URI;
+import java.time.Duration;
 
 @SpringBootApplication
 @RestController
@@ -87,10 +94,45 @@ public class DemoApplication extends SpringBootServletInitializer implements Web
 	}
 	public static void main(String[] args) {
 		SpringApplication.run(DemoApplication.class, args);
-		logger.info("App Version: 1.0.4");
+		logger.info("App Version: 1.0.7.1");
 	}
 
 	private static final Logger logger = LoggerFactory.getLogger(DemoApplication.class);
+
+	@GetMapping("/dummy")
+	public ResponseEntity<?> dummy() {
+		logger.info("Dummy endpoint called");		
+		// Make POST request to httpbin.org/post
+		try {
+			HttpClient client = HttpClient.newBuilder()
+				.connectTimeout(Duration.ofSeconds(10))
+				.build();
+			
+			HttpRequest request = HttpRequest.newBuilder()
+				.uri(URI.create("https://httpbin.org/post"))
+				.timeout(Duration.ofSeconds(30))
+				.header("Content-Type", "application/json")
+				.POST(HttpRequest.BodyPublishers.ofString("{\"message\": \"Hello from Spring Boot!\"}"))
+				.build();
+			
+			HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+			logger.info("POST request to httpbin.org/post completed with status: " + response.statusCode());
+			logger.info("Response body: " + response.body());
+			
+			// Return the httpbin response in the ResponseEntity
+			Map<String, Object> result = new HashMap<>();
+			result.put("status", "success");
+			result.put("httpbin_status_code", response.statusCode());
+			result.put("httpbin_response", response.body());
+			return ResponseEntity.ok(result);
+		} catch (Exception e) {
+			logger.error("Error making POST request to httpbin.org/post: " + e.getMessage());
+			Map<String, Object> errorResult = new HashMap<>();
+			errorResult.put("status", "error");
+			errorResult.put("error_message", e.getMessage());
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResult);
+		}
+	}
 
     @GetMapping("/health")
     public ResponseEntity<?> healthCheck() {

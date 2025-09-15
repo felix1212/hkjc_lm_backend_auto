@@ -1,0 +1,380 @@
+name: HKJC-LM
+services:
+  postgres:
+    image: postgres:16.8
+    container_name: postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./conf/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./conf/postgresql.conf:/etc/postgresql/postgresql.conf.sample
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf.sample"] # For Database monitoring
+    networks:
+      - hkjc-lm
+
+  hkjc-lm-backend-dd-auto:
+    image: felix1212/hkjc-lm-backend-auto:1.0.7.1
+    container_name: hkjc-lm-backend-dd-auto
+    environment:
+      #### Environment Variables for DD Tracer ####
+      - DD_AGENT_HOST=dd-agent
+      - DD_TRACE_DEBUG=false
+      - DD_DYNAMIC_INSTRUMENTATION_ENABLED=TRUE
+      - DD_TRACE_REMOVE_INTEGRATION_SERVICE_NAMES_ENABLED=true
+      - DD_TRACE_RATE_LIMIT=500
+      # - DD_TRACE_OTEL_ENABLED=true ## Force DD to use OTel trace ID. Otherwise, custom instrumentation part in code will use DD trace ID.
+    ports:
+      - "8080:13579"
+    networks:
+      - hkjc-lm
+    # -Ddd.service=hkjc-otel-poc -> Override OTel SDK settings in code
+    # -Ddd.env=staging -> Override OTel SDK settings in code
+    # -Ddd.version=1.0 -> Override OTel SDK settings in code
+    # -Ddd.trace.propagation.style=tracecontext -> Use W3C header
+    # -Ddd.dbm.propagation.mode=full -> Correlate Database Monitoring and Traces
+    # -Ddd.integration.jdbc-datasource.enabled -> Correlate Database Monitoring and Traces
+    # -Ddd.dbm.trace_prepared_statements=true -> Enable the prepared statements tracing
+    
+    #### Java options for DD tracer ####       
+    command: >
+      java -javaagent:/app/dd-java-agent.jar
+      -Ddd.profiling.enabled=true
+      -XX:FlightRecorderOptions=stackdepth=256
+      -Ddd.service=Testapp-hkjc-lm-backend-dd-auto
+      -Ddd.env=DEV
+      -Ddd.version=1.0.7.1
+      -Ddd.trace.propagation.style=tracecontext
+      -Ddd.trace.otel.enabled=true
+      -Ddd.dbm.propagation.mode=full
+      -Ddd.dbm.trace_prepared_statements=true
+      -Ddd.integration.jdbc-datasource.enabled=true
+      -Ddd.tags=HKJC_Tier:Testapp-hkjc-lm-backend-dd-auto,HKJC_HKLM_Service:Service
+      -jar /app/hkjc-lm-backend-auto.war --spring.datasource.url=jdbc:postgresql://postgres:5432/testing_db
+      --healthdelay=0
+      --querydbdelay=2500
+      --querytabledelay=0
+      --insertdbdelay=17500
+      --truncatetabledelay=12500
+      --randomdelayupperbound=10
+      --randomdelaylowerbound=1
+      --allowedOrigins=http://localhost:13579,http://localhost:8080,http://localhost:8000,http://10.0.0.55:8080,http://10.0.0.55:8000,null
+      --allowedHeaders=Origin,Content-Type,x-datadog-trace-id,x-datadog-parent-id,x-datadog-origin,traceparent,tracestate
+      --exposedHeaders=x-datadog-trace-id,x-datadog-parent-id,x-datadog-origin,traceparent,tracestate
+      --allowedMethods=GET,POST,OPTIONS
+    depends_on:
+      - dd-agent
+      - postgres
+
+  hkjc-lm-backend-dd-manual:
+    image: felix1212/hkjc-lm-backend-manual:1.0.2.2
+    container_name: hkjc-lm-backend-dd-manual
+    environment:
+      #### Environment Variables for DD Tracer ####
+      - DD_AGENT_HOST=dd-agent
+      - DD_TRACE_DEBUG=false
+      - DD_TRACE_REMOVE_INTEGRATION_SERVICE_NAMES_ENABLED=true
+      # - DD_TRACE_OTEL_ENABLED=true ## Force DD to use OTel trace ID. Otherwise, custom instrumentation part in code will use DD trace ID.
+    ports:
+      - "8090:8080"
+    networks:
+      - hkjc-lm
+    # -Ddd.service=hkjc-otel-poc -> Override OTel SDK settings in code
+    # -Ddd.env=staging -> Override OTel SDK settings in code
+    # -Ddd.version=1.0 -> Override OTel SDK settings in code
+    # -Ddd.trace.propagation.style=tracecontext -> Use W3C header
+    # -Ddd.dbm.propagation.mode=full -> Correlate Database Monitoring and Traces
+    # -Ddd.integration.jdbc-datasource.enabled -> Correlate Database Monitoring and Traces
+    # -Ddd.dbm.trace_prepared_statements=true -> Enable the prepared statements tracing
+    # -Ddatadog.slf4j.simpleLogger.logFile=/app/logs/hkjc-lm-backend-dd-manual.log -> Sample of file logging
+    
+    #### Java options for DD tracer ####       
+    command: >
+      java -javaagent:/app/dd-java-agent.jar
+      -Ddd.profiling.enabled=true
+      -XX:FlightRecorderOptions=stackdepth=256
+      -Ddd.service=Testapp-hkjc-lm-backend-dd-manual
+      -Ddd.env=DEV
+      -Ddd.version=1.0.2.2
+      -Ddd.trace.propagation.style=tracecontext
+      -Ddd.trace.otel.enabled=true
+      -Ddd.dbm.propagation.mode=full
+      -Ddd.dbm.trace_prepared_statements=true
+      -Ddd.integration.jdbc-datasource.enabled=true
+      -Ddd.tags=HKJC_Tier:Testapp-hkjc-lm-backend-dd-manual,HKJC_HKLM_Service:Service
+      -jar /app/hkjc-lm-backend-manual.war --spring.datasource.url=jdbc:postgresql://postgres:5432/testing_db
+      --service.version=1.0.2.1-otelsdk
+    depends_on:
+      - dd-agent
+      - postgres
+
+  hkjc-lm-frontend-dd-manual:
+    image: felix1212/hkjc-lm-frontend-manual:1.1.1
+    container_name: hkjc-lm-frontend-dd-manual
+    environment:
+      #### Environment Variables for DD Tracer ####
+      - DD_AGENT_HOST=dd-agent
+      - DD_TRACE_DEBUG=false
+      - DD_TRACE_REMOVE_INTEGRATION_SERVICE_NAMES_ENABLED=true
+      - DD_TRACE_RATE_LIMIT=5000
+      # - DD_TRACE_OTEL_ENABLED=true ## Force DD to use OTel trace ID. Otherwise, custom instrumentation part in code will use DD trace ID.
+    ports:
+      - "9080:24680"
+    networks:
+      - hkjc-lm
+    # -Ddd.service=hkjc-otel-poc -> Override OTel SDK settings in code
+    # -Ddd.env=staging -> Override OTel SDK settings in code
+    # -Ddd.version=1.0 -> Override OTel SDK settings in code
+    # -Ddd.trace.propagation.style=tracecontext -> Use W3C header
+    # -Ddd.dbm.propagation.mode=full -> Correlate Database Monitoring and Traces
+    # -Ddd.integration.jdbc-datasource.enabled -> Correlate Database Monitoring and Traces
+    # -Ddd.dbm.trace_prepared_statements=true -> Enable the prepared statements tracing
+    # -Ddatadog.slf4j.simpleLogger.logFile=/app/logs/hkjc-lm-backend-dd-manual.log -> Sample of file logging
+    
+    #### Java options for DD tracer ####       
+    command: >
+      java -javaagent:/app/dd-java-agent.jar
+      -Ddd.profiling.enabled=true
+      -XX:FlightRecorderOptions=stackdepth=256
+      -Ddd.service=Testapp-hkjc-lm-frontend-dd-manual
+      -Ddd.env=DEV_1551
+      -Ddd.version=1.1.1
+      -Ddd.trace.propagation.style=tracecontext
+      -Ddd.trace.otel.enabled=true
+      -Ddd.dbm.propagation.mode=full
+      -Ddd.dbm.trace_prepared_statements=true
+      -Ddd.integration.jdbc-datasource.enabled=true
+      -Ddd.tags=HKJC_Tier:Testapp-hkjc-lm-frontend-dd-manual,HKJC_HKLM_Service:Service
+      -jar /app/hkjc-lm-frontend-manual.war
+      --service.version=1.0.2.1-otelsdk
+      --deployment.environment=dev
+      --service.name=Testapp-hkjc-lm-frontend-dd-manual
+      --dd.query.url=http://hkjc-lm-backend-dd-auto:13579/querydb
+      --dd.insert.url=http://hkjc-lm-backend-dd-auto:13579/insertdb
+      --dd.truncate.url=http://hkjc-lm-backend-dd-auto:13579/truncatetable
+      --otel.query.url=http://hkjc-lm-backend-dd-manual:8080/querydb
+      --otel.insert.url=http://hkjc-lm-backend-dd-manual:8080/insertdb
+      --otel.truncate.url=http://hkjc-lm-backend-dd-manual:8080/truncatetable
+      --otel.http.endpoint=http://dd-agent:4318/v1/traces
+      --otel.sdk.enabled=false
+      --health.check.otel.enabled=false
+    depends_on:
+      - hkjc-lm-backend-dd-manual
+
+  hkjc-lm-frontend-nil-manual:
+    image: felix1212/hkjc-lm-frontend-manual:1.1
+    container_name: hkjc-lm-frontend-nil-manual
+    # environment:
+      #### Environment Variables for DD Tracer ####
+      # - DD_AGENT_HOST=dd-agent
+      # - DD_TRACE_DEBUG=false
+      # - DD_TRACE_REMOVE_INTEGRATION_SERVICE_NAMES_ENABLED=true
+      # - DD_TRACE_OTEL_ENABLED=true ## Force DD to use OTel trace ID. Otherwise, custom instrumentation part in code will use DD trace ID.
+    ports:
+      - "9081:24680"
+    networks:
+      - hkjc-lm
+    # -Ddd.service=hkjc-otel-poc -> Override OTel SDK settings in code
+    # -Ddd.env=staging -> Override OTel SDK settings in code
+    # -Ddd.version=1.0 -> Override OTel SDK settings in code
+    # -Ddd.trace.propagation.style=tracecontext -> Use W3C header
+    # -Ddd.dbm.propagation.mode=full -> Correlate Database Monitoring and Traces
+    # -Ddd.integration.jdbc-datasource.enabled -> Correlate Database Monitoring and Traces
+    # -Ddd.dbm.trace_prepared_statements=true -> Enable the prepared statements tracing
+    # -Ddatadog.slf4j.simpleLogger.logFile=/app/logs/hkjc-lm-backend-dd-manual.log -> Sample of file logging
+    
+    #### Java options for DD tracer ####       
+    command: >
+      java -jar /app/hkjc-lm-frontend-manual.war
+      --service.version=1.1
+      --deployment.environment=dev
+      --service.name=Testapp-hkjc-lm-frontend-nil-manual
+      --dd.query.url=http://hkjc-lm-backend-dd-auto:13579/querydb
+      --dd.insert.url=http://hkjc-lm-backend-dd-auto:13579/insertdb
+      --dd.truncate.url=http://hkjc-lm-backend-dd-auto:13579/truncatetable
+      --otel.query.url=http://hkjc-lm-backend-dd-manual:8080/querydb
+      --otel.insert.url=http://hkjc-lm-backend-dd-manual:8080/insertdb
+      --otel.truncate.url=http://hkjc-lm-backend-dd-manual:8080/truncatetable
+      --otel.http.endpoint=http://dd-agent:4318/v1/traces
+      --otel.sdk.enabled=true
+    depends_on:
+      - hkjc-lm-backend-dd-manual
+
+  hkjc-lm-frontend-dd-auto:
+    image: felix1212/hkjc-lm-frontend-auto:1.0.5
+    container_name: hkjc-lm-frontend-dd-auto
+    environment:
+      #### Environment Variables for DD Tracer ####
+      - DD_AGENT_HOST=dd-agent
+      - DD_TRACE_DEBUG=false
+      - DD_DYNAMIC_INSTRUMENTATION_ENABLED=TRUE
+      - DD_TRACE_REMOVE_INTEGRATION_SERVICE_NAMES_ENABLED=true
+      #- DD_TRACE_OTEL_ENABLED=true ## Force DD to use OTel trace ID. Otherwise, custom instrumentation part in code will use DD trace ID.
+    ports:
+      - "9090:24680"
+    networks:
+      - hkjc-lm
+    depends_on:
+      - hkjc-lm-backend-dd-auto
+    #### Java options for OTel SDK ####
+    command: >
+      java -javaagent:/app/dd-java-agent.jar
+      -Ddd.profiling.enabled=true
+      -XX:FlightRecorderOptions=stackdepth=256
+      -Ddd.service=Testapp-hkjc-lm-frontend-dd-auto
+      -Ddd.env=DEV
+      -Ddd.version=1.0.5
+      -Ddd.trace.otel.enabled=true
+      -Ddd.trace.propagation.style=tracecontext
+      -Ddd.trace.debug=false
+      -Ddd.trace.startup.logs=false
+      -Ddd.tags=HKJC_Tier:Testapp-hkjc-lm-frontend-dd-auto,HKJC_HKLM_Service:Service
+      -jar /app/hkjc-lm-frontend-auto.war
+      --dd.query.url=http://hkjc-lm-backend-dd-auto:13579/querydb
+      --dd.insert.url=http://hkjc-lm-backend-dd-auto:13579/insertdb
+      --dd.truncate.url=http://hkjc-lm-backend-dd-auto:13579/truncatetable
+      --query.delay=0
+      --insert.delay=0
+      --truncate.delay=0
+ 
+  hkjc-lm-pojo-dd-auto:
+    image: felix1212/hkjc-lm-pojo-auto:1.5  # 1.5 - Refactored to use FirstClass, SecondClass and ThirdClass to test DD_TRACE_METHODS
+    container_name: hkjc-lm-pojo-dd-auto
+    environment:
+      #### Environment Variables for DD Tracer ####
+      - DD_AGENT_HOST=dd-agent
+      - DD_TRACE_DEBUG=false
+      - DD_TRACE_METHODS=com.example.invoice.FirstClass[slow,normal,fast,all,secondClass,makeHttpRequest];com.example.invoice.SecondClass[*];com.example.invoice.ThirdClass[*]
+      - DD_TRACE_REMOVE_INTEGRATION_SERVICE_NAMES_ENABLED=true
+      # - DD_TRACE_OTEL_ENABLED=true ## Force DD to use OTel trace ID. Otherwise, custom instrumentation part in code will use DD trace ID.
+    ports:
+      - "8081:24680"
+    networks:
+      - hkjc-lm
+    depends_on:
+      - dd-agent
+    #### Java options for OTel SDK ####  
+    command: >
+      java -javaagent:/app/dd-java-agent.jar
+      -Ddd.profiling.enabled=true
+      -XX:FlightRecorderOptions=stackdepth=256
+      -Ddd.service=Testapp-hkjc-lm-pojo-dd-auto
+      -Ddd.env=DEV
+      -Ddd.version=1.5
+      -Ddd.trace.otel.enabled=true
+      -Ddd.trace.propagation.style=tracecontext
+      -Ddd.trace.debug=false
+      -Ddd.trace.startup.logs=false
+      -Ddd.tags=HKJC_Tier:Testapp-hkjc-lm-pojo-dd-auto,HKJC_HKLM_Service:Service
+      -jar /app/hkjc-lm-pojo-auto.jar
+
+  hkjc-lm-pojo-otel-auto:
+    image: felix1212/hkjc-lm-pojo-auto:1.5  # 1.5 - Refactored to use FirstClass, SecondClass and ThirdClass to test DD_TRACE_METHODS
+    container_name: hkjc-lm-pojo-otel-auto
+    environment:
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      - OTEL_SERVICE_NAME=Testapp-hkjc-lm-pojo-otel-auto
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://dd-agent:4318
+      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=DEV,service.version=1.5,HKJC_Tier=Testapp-hkjc-lm-pojo-dd-auto,HKJC_HKLM_Service=Service
+      - OTEL_INSTRUMENTATION_METHODS_INCLUDE=com.example.invoice.FirstClass[slow,normal,fast,all,secondClass,makeHttpRequest];com.example.invoice.SecondClass[method1,boolean1,makeHttpRequest];com.example.invoice.ThirdClass[method1,boolean1,makeHttpRequest]
+    ports:
+      - "8082:24680"
+    networks:
+      - hkjc-lm
+    depends_on:
+      - dd-agent
+    #### Java options for OTel SDK ####  
+    command: >
+      java -javaagent:/app/opentelemetry-javaagent.jar
+      -jar /app/hkjc-lm-pojo-auto.jar
+
+  hkjc-lm-webapp:
+    image: nginx:1.28.0
+    container_name: hkjc-lm-webapp
+    ports:
+      - "8000:80"
+    volumes:
+      - ./web-app:/usr/share/nginx/html:ro
+    networks:
+      - hkjc-lm
+
+  dd-agent:
+    cgroup: host
+    pid: host
+    container_name: dd-agent
+    environment:
+      - DD_API_KEY=${DD_API_KEY}
+      - DD_SITE=datadoghq.com
+      # - DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_GRPC_ENDPOINT=0.0.0.0:4317
+      - DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_HTTP_ENDPOINT=0.0.0.0:4318
+      - DD_LOGS_INJECTION=true
+      - DD_LOGS_ENABLED=true
+      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true
+      # - DD_OTLP_CONFIG_LOGS_ENABLED=true
+      - DD_APM_ENABLED=true
+      - DD_APM_RECEIVER_PORT=8126
+      - DD_APM_MAX_TPS=5000
+      - DD_APM_TARGET_TPS=5000
+      - DD_APM_NON_LOCAL_TRAFFIC=true # Receive APM data from other containers
+      - DD_DOGSTATSD_NON_LOCAL_TRAFFIC=true # Receive metrics from other containers
+      - DD_APM_RECEIVER_SOCKET=/opt/datadog/apm/inject/run/apm.socket
+      - DD_PROCESS_AGENT_ENABLED=true
+      #- DD_SYSTEM_PROBE_NETWORK_ENABLED=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./conf/db_monitoring_conf.yaml:/conf.d/postgres.d/conf.yaml # Enable Postgre DB monitoring
+    ports:
+    #   # - 4317:4317
+    #   - 8126:8126/tcp
+      - 4318:4318
+    image: gcr.io/datadoghq/agent:latest
+    cap_add:
+      - SYS_ADMIN
+      - SYS_RESOURCE
+      - SYS_PTRACE
+      - NET_ADMIN
+      - NET_BROADCAST
+      - NET_RAW
+      - IPC_LOCK
+      - CHOWN
+    security_opt:
+      - apparmor:unconfined
+    networks:
+      - hkjc-lm
+  # jaeger:
+  #   image: jaegertracing/all-in-one:latest
+  #   container_name: jaeger
+  #   ports:
+  #     - "16686:16686"
+  #     - "43170:4317"
+  #     - "43180:4318"
+  #   environment:
+  #     - LOG_LEVEL=debug
+  #   networks:
+  #     - hkjc-lm
+
+  
+  # otel-collector:
+  #   ports:
+  #       - 4317:4317
+  #   container_name: otel_collector
+  #   volumes:
+  #       - ./otel_collector_config.yaml:/etc/otelcol-contrib/config.yaml
+  #   image: otel/opentelemetry-collector-contrib
+  #   networks:
+  #     - hkjc-lm
+  # netshoot:
+  #   image: nicolaka/netshoot
+  #   command: tail -f /dev/null
+  #   privileged: true
+  #   networks:
+  #     - hkjc-lm
+
+networks:
+  hkjc-lm:
